@@ -3,12 +3,17 @@ const app = express();
 require('dotenv/config')
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
-const postRoute = require('./routes/posts');
 
 app.use(bodyParser.json());
+const postRoute = require('./routes/posts');
+const authRoute = require('./routes/auth');
+const intRoute = require('./routes/postInteractions')
 
 app.use('/posts', postRoute);
+app.use('/user', authRoute);
+app.use('/postInt', intRoute)
 
+  
 app.get('/', (req, res) =>{
     res.send('Piazza API is live!')
 });
