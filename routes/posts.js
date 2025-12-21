@@ -9,47 +9,41 @@ const User = require('../schemas/User');
 //Post
 router.post('/', verifyToken, async (req, res) => {
     const authorID = req.user._id;
-
-    let expirationDate;
-    if (req.body.expirationMinutes) {
-        expirationDate = new Date(Date.now() + req.body.expirationMinutes * 60000);
-    } else {
-        // Fallback to expiresAt or let the schema default handle it
-        expirationDate = req.body.expiresAt || undefined; 
-    }
-
-    const postData = new Post({
-        title: req.body.title,
-        topic: req.body.topic,
-        messageBody: req.body.messageBody,
-        author: authorID, 
-        expiresAt: expirationDate,
-        status: 'Live',
-        // Interactions usually start at 0/empty for new posts
-        likes: [],
-        dislikes: [],
-        totalInteractions: 0,
-        comments: []
-    });
-
     try {
-        // 1. Save the post to MongoDB
+        //Get username
+        const user = await User.findById(authorID, 'username');
+        if (!user) {
+            return res.status(404).send({ message: 'User not found' });
+        }
+        const authorName = user.username; 
+        let expirationDate;
+        if (req.body.expirationMinutes) {
+            expirationDate = new Date(Date.now() + req.body.expirationMinutes * 60000);
+        } else {
+            expirationDate = req.body.expiresAt || undefined; 
+        }
+        const postData = new Post({
+            title: req.body.title,
+            topic: req.body.topic,
+            messageBody: req.body.messageBody,
+            author: authorID, 
+            authorName: authorName,
+            expiresAt: expirationDate,
+            status: 'Live',
+            likes: [],
+            dislikes: [],
+            totalInteractions: 0,
+            comments: []
+        });
         const savedPost = await postData.save();
-
-        // 2. Fetch the post again to "Populate" the author name/email
-        // We use the ID of the post we just saved
-        const populatedPost = await Post.findById(savedPost._id)
-            .populate('author', 'username email'); // Only bring back the name and email, not the password
-
-        // 3. Send the populated post back to Postman
-        res.status(201).send(populatedPost);
+        res.status(201).send(savedPost);
 
     } catch (err) {
         res.status(400).send({ message: 'Error creating post', details: err.message });
     }
 });
 
-//Get everything (with filters)
+//Get everything (filter)
 router.get('/', verifyToken, async (req, res) => {
     try {
         const { topic, status } = req.query;
@@ -65,38 +59,27 @@ router.get('/', verifyToken, async (req, res) => {
         const getPosts = await Post.find(filter)
             .populate('author', 'username email')
             .sort({ createdAt: -1 });
-
         if (getPosts.length === 0) {
             return res.status(404).send({ message: 'No posts found matching the criteria.' });
         }
-
         res.send(getPosts);
     } catch (err) {
         res.status(500).send({ message: 'Error fetching posts.', details: err.message });
     }
 });
 
-// --- Code for the four endpoints (postRoutes.js) ---
-
-// 1. Get Most Active Post in 'Tech'
-// --- Code for the four endpoints (postRoutes.js) ---
-
-// 1. Get Most Active Post in 'Politics'
+//Get Most Active Post in 'Politics'
 router.get('/mostInt/Politics', verifyToken, async (req, res) => {
     try {
         const pipeline = [
-            // Stage 1: Match by Live status AND the fixed topic 'Politics'
+            //Match by Live status AND the fixed topic 'Politics'
             { $match: { status: 'Live', topic: 'Politics' } }, 
-            
-            // Stage 2: Sort using the pre-calculated field
+            //Sort using the pre-calculated field
             { $sort: { totalInteractions: -1 } },
-            
-            // Stage 3: Take only the single top post
+            //Take only the single top post
             { $limit: 1 }
         ];
-        
         const mostActivePost = await Post.aggregate(pipeline); 
-
         if (mostActivePost.length === 0) {
             return res.status(404).send({ message: 'No active posts found for topic "Politics".' });
         }
@@ -106,7 +89,7 @@ router.get('/mostInt/Politics', verifyToken, async (req, res) => {
     }
 });
 
-// 2. Get Most Active Post in 'Health'
+//Get Most Active Post in 'Health'
 router.get('/mostInt/Health', verifyToken, async (req, res) => {
     try {
         const pipeline = [
@@ -126,7 +109,7 @@ router.get('/mostInt/Health', verifyToken, async (req, res) => {
     }
 });
 
-// 3. Get Most Active Post in 'Sport'
+//Get Most Active Post in 'Sport'
 router.get('/mostInt/Sport', verifyToken, async (req, res) => {
     try {
         const pipeline = [
@@ -146,7 +129,7 @@ router.get('/mostInt/Sport', verifyToken, async (req, res) => {
     }
 });
 
-// 4. Get Most Active Post in 'Tech'
+//Get Most Active Post in 'Tech'
 router.get('/mostInt/Tech', verifyToken, async (req, res) => {
     try {
         const pipeline = [
@@ -154,9 +137,7 @@ router.get('/mostInt/Tech', verifyToken, async (req, res) => {
             { $sort: { totalInteractions: -1 } },
             { $limit: 1 }
         ];
-        
         const mostActivePost = await Post.aggregate(pipeline); 
-
         if (mostActivePost.length === 0) {
             return res.status(404).send({ message: 'No active posts found for topic "Tech".' });
         }

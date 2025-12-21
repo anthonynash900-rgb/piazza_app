@@ -10,6 +10,13 @@ const postSchema = mongoose.Schema({
         type:String,
         required:true
     },
+    "author": {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    "authorName": { type: String,
+        required: true },
     "topic":{
         type:String,
         required:true,

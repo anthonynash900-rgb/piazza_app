@@ -8,6 +8,10 @@ app.use(bodyParser.json());
 const postRoute = require('./routes/posts');
 const authRoute = require('./routes/auth');
 const intRoute = require('./routes/postInteractions')
+const statusUpdaterJob = require('./sheduledTasks');
+
+statusUpdaterJob.start(); 
+console.log('Cron Job Initialized...');
 
 app.use('/posts', postRoute);
 app.use('/user', authRoute);

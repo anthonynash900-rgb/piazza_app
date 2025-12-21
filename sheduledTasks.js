@@ -1,4 +1,3 @@
-// scheduledTasks.js
 
 const cron = require('node-cron');
 const Post = require('./schemas/Post');

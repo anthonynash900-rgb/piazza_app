@@ -10,57 +10,51 @@ router.patch('/like/:postId', verifyToken, async (req, res) => {
     const authorId = req.user._id;
 
     try {
-        // --- 1. Fetch Post ---
+        //Get post
         const post = await Post.findById(postId);
         if (!post) {
             return res.status(404).send({ message: 'Post not found.' });
         }
-        // 2. Security Check: Self-Interaction
+        //Security Check for self-Interaction
         if (post.author.equals(authorId)) {
             return res.status(403).send({ message: 'You cannot like your own post.' });
         }
-        // --- 2. IMPROVED SECURITY CHECK (Status + Real-time Clock) ---
+        //Expiration check
         const currentTime = new Date();
         // This blocks if the status is already 'Expired' OR if the clock has passed the deadline
         if (post.status === 'Expired' || post.expiresAt < currentTime) {
-            
             // Sync database status if it's currently 'Live' but time is up
             if (post.status === 'Live') {
                 await Post.updateOne({ _id: postId }, { $set: { status: 'Expired' } });
             }
-
-            // IMPORTANT: Use 'return' to stop the function here
+            //Use return to stop the function
             return res.status(403).send({ message: 'Cannot like or interact with an expired post.' });
         }
-        
-        // --- 3. Get Author and check current state ---
+        //Get Author and check current state ---
         const author = await User.findById(authorId, 'username');
         if (!author || !author.username) {
             return res.status(404).send({ message: 'Author username not found.' });
         }
-
         const authorName = author.username;
         const alreadyLiked = post.likes.some(like => like.authorId.equals(authorId));
         const wasDisliked = post.dislikes.some(dislike => dislike.authorId.equals(authorId));
-
         const newLike = {
             type: 'like', 
             authorId: authorId,
             authorName: authorName,
             timestamp: new Date()
         };
-
-        // --- 4. Logic for Interaction Arrays and Counters ---
+        //Logic for Interaction Arrays and Counters
         const { updateOperation, responseMessage, totalChange } = (() => {
             if (alreadyLiked) {
-                // Scenario: UNLIKE
+                //Unlike
                 return { 
                     updateOperation: { $pull: { likes: { authorId: authorId } } },
                     responseMessage: 'Post unliked.',
                     totalChange: -1 
                 };
             } else {
-                // Scenario: LIKE (removes dislike if it exists)
+                //LIKE (removes dislike if it exists)
                 return {
                     updateOperation: {
                         $push: { likes: newLike },
@@ -73,9 +67,8 @@ router.patch('/like/:postId', verifyToken, async (req, res) => {
             }
         })();
         
-        // --- 5. Atomic Database Update ---
+        //Db update
         const newTotalInteractions = post.totalInteractions + totalChange; 
-        
         const result = await Post.findByIdAndUpdate(
             postId,
             { 
@@ -84,12 +77,10 @@ router.patch('/like/:postId', verifyToken, async (req, res) => {
             },
             { new: true }
         );
-
         if (!result) {
             return res.status(404).send({ message: 'Update failed.' });
         }
-
-        // --- 6. Send Single Final Response ---
+        //Final Response
         res.send({
             message: responseMessage,
             interactionType: alreadyLiked ? 'unlike' : 'like', 
@@ -111,42 +102,38 @@ router.patch('/like/:postId', verifyToken, async (req, res) => {
         }
     }
 });
-
 router.patch('/dislike/:postId', verifyToken, async (req, res) => {
     const postId = req.params.postId;
     const authorId = req.user._id;
-
     try {
-        // 1. Fetch Post
+        //Get Post
         const post = await Post.findById(postId);
         if (!post) {
             return res.status(404).send({ message: 'Post not found.' });
         }
 
-        // 2. THE SECURITY CHECK (Combined Status + Time)
+        //Expiration check
         const currentTime = new Date();
         if (post.status === 'Expired' || post.expiresAt < currentTime) {
-            // Update DB status if it hasn't been flipped yet
+            //Update db status
             if (post.status === 'Live') {
                 await Post.updateOne({ _id: postId }, { $set: { status: 'Expired' } });
             }
-            // IMPORTANT: Use 'return' so the code below NEVER runs
+            //Return message if post expired
             return res.status(403).send({ message: 'Cannot dislike or interact with an expired post.' });
         }
-        // 2. Security Check: Self-Interaction
+        //Check for self-interaction
         if (post.author.equals(authorId)) {
             return res.status(403).send({ message: 'You cannot like your own post.' });
         }
-        // 3. Fetch Author
+        // 3.Get Author
         const author = await User.findById(authorId, 'username');
         if (!author || !author.username) {
             return res.status(404).send({ message: 'Author username not found.' });
         }
-
         const authorName = author.username;
         const alreadyDisliked = post.dislikes.some(dislike => dislike.authorId.equals(authorId));
         const wasLiked = post.likes.some(like => like.authorId.equals(authorId));
-
         // 4. Interaction Logic
         const newDislike = {
             type: 'dislike', 
@@ -154,7 +141,6 @@ router.patch('/dislike/:postId', verifyToken, async (req, res) => {
             authorName: authorName,
             timestamp: new Date()
         };
-
         const { updateOperation, responseMessage, totalChange } = (() => {
             if (alreadyDisliked) {
                 return { 
@@ -174,15 +160,14 @@ router.patch('/dislike/:postId', verifyToken, async (req, res) => {
             }
         })();
         
-        // 5. Update Database
+        //Update db
         const newTotalInteractions = post.totalInteractions + totalChange; 
         const result = await Post.findByIdAndUpdate(
             postId,
             { ...updateOperation, $set: { totalInteractions: newTotalInteractions } },
             { new: true }
         );
-
-        // 6. Final Response (Only one response will ever be reached now)
+        //Final Response
         res.send({
             message: responseMessage,
             interactionType: alreadyDisliked ? 'undislike' : 'dislike', 
@@ -194,55 +179,47 @@ router.patch('/dislike/:postId', verifyToken, async (req, res) => {
 
     } catch (err) {
         console.error('Error during dislike:', err);
-        // Only send if headers haven't been sent already
         if (!res.headersSent) {
             res.status(500).send({ message: 'Internal server error.', details: err.message });
         }
     }
 });
 
-
 //comment Post
-router.post('/comment/:postId', verifyToken, async (req, res) => {
-    const postId = req.params.postId;
-    
-    // --- Data Capture ---
-    const authorId = req.user._id; 
-    const message = req.body.message; 
-
-    if (!message) {
-        return res.status(400).send({ message: "Comment message is required." });
-    }
-
+router.post('/', verifyToken, async (req, res) => {
+    const authorID = req.user._id;
     try {
-        // 1. Fetch the actual username from the User collection
-        const author = await User.findById(authorId, 'username');
-        if (!author || !author.username) {
-             return res.status(404).send({ message: 'Author username not found.' });
+        //Get username
+        const user = await User.findById(authorID, 'username');
+        if (!user) {
+            return res.status(404).send({ message: 'User not found' });
         }
-        const authorName = author.username;
-        const comment = {
-            authorId: authorId,
+        const authorName = user.username;
+        let expirationDate;
+        if (req.body.expirationMinutes) {
+            expirationDate = new Date(Date.now() + req.body.expirationMinutes * 60000);
+        } else {
+            expirationDate = req.body.expiresAt || undefined; 
+        }
+        const postData = new Post({
+            title: req.body.title,
+            topic: req.body.topic,
+            messageBody: req.body.messageBody,
+            author: authorID, 
             authorName: authorName,
-            message: message, 
-        };
-        const result = await Post.findByIdAndUpdate(
-            postId,
-            { 
-            $push: { comments: comment } 
-            },
-            { new: true }
-        );
-        if (!result) {
-            return res.status(404).send({ message: 'Post not found.' });
-        }
-        res.send({ 
-            message: 'Comment added .',
-            newComment: comment,
-            totalComments: result.comments.length
+            expiresAt: expirationDate,
+            status: 'Live',
+            likes: [],
+            dislikes: [],
+            totalInteractions: 0,
+            comments: []
         });
+        //Save the post
+        const savedPost = await postData.save();
+        //Return the saved post
+        res.status(201).send(savedPost);
     } catch (err) {
-        res.status(400).send({ message: err.message });
+        res.status(400).send({ message: 'Error creating post', details: err.message });
     }
 });
 

@@ -24,12 +24,10 @@ const postValidation = (data) => {
         title: joi.string().required(),
         topic: joi.string().valid('Politics', 'Health', 'Sport', 'Tech').required(),
         messageBody: joi.string().required(),
-        // Add this line to allow the field through the "gate"
         expirationMinutes: joi.number().integer().min(1).optional() 
     });
     return schema.validate(data);
 };
-
 
 module.exports.registerValidation = registerValidation;
 module.exports.loginValidation = loginValidation
